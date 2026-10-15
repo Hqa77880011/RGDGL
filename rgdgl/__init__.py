@@ -1,1 +1,1 @@
-from .model import ReliabilityGraph
+from .model import ReliabilityGraph as ReliabilityGraph

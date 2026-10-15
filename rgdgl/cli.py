@@ -149,6 +149,7 @@ def evaluate(args):
     values, latency = collect(model, dataset, config)
     calibration = checkpoint["variance_scale"] if not args.uncalibrated else 1.0
     result, predictions = metrics(values, metadata["mean"], metadata["scale"], calibration, args.mape_threshold)
+    predictions["origin_indices"] = np.asarray(dataset.origins)
     result.update(config=vars(args), model_variant=config.variant, parameters=sum(p.numel() for p in model.parameters()),
                   mean_sample_latency_seconds=latency, realized_missing_rate=float(mask_record["realized_rate"]),
                   variance_scale=calibration, seed=config.seed)

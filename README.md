@@ -71,3 +71,14 @@ rgdgl plot --metrics outputs/full_random03/metrics.json outputs/nogate_random03/
 ```
 
 Supply multiple rates from one dataset, fault family and seed to draw robustness curves. `robustness_slopes.json` fits MAE against realized missingness for each variant. Keep conditions separate when making these plots; repeat training seeds and complete mask realizations before summarizing variability.
+
+## Cost and paired uncertainty analysis
+
+```bash
+rgdgl-benchmark --data data/metr --model outputs/full/model.pt --output outputs/full/cost.json --device cpu
+rgdgl-compare --first outputs/full_random03/predictions.npz --second outputs/nogate_random03/predictions.npz --output outputs/paired.json --block 288 --resamples 10000
+```
+
+The benchmark measures batch-one inference after 200 warmup calls and 1,000 timed calls. It reports mean/p95 latency, parameter count, process RSS sampled between calls, and peak allocated CUDA memory when applicable. PyTorch's profiler reports the FLOPs of supported operators; this partial count does not include every recurrent, indexing or graph-statistics operation.
+
+For hierarchical paired bootstrap, pass multiple seed/mask runs in corresponding order to `--first` and `--second`. The command checks origin indices, targets and availability, resamples complete runs, then moving blocks of 288 forecast origins inside each selected run. It reports the first-minus-second MAE difference, a 95% interval and a centered two-sided bootstrap p-value. Negative differences favor the first model. A single pair still permits block uncertainty analysis but cannot estimate between-run variability. Use complete matching seed/mask runs for the paper's full comparison.

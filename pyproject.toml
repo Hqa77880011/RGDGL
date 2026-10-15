@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "rgdgl"
+version = "0.1.0"
+description = "Reliability-gated dynamic graph learning implementation"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24", "scipy>=1.11", "pandas>=2", "tables>=3.8", "torch>=2.2", "matplotlib>=3.7"]
+[project.scripts]
+rgdgl = "rgdgl.cli:main"
+[tool.setuptools.packages.find]
+include = ["rgdgl*"]

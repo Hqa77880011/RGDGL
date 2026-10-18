@@ -2,19 +2,17 @@
 
 Implementation of **Reliability-Gated Dynamic Graph Learning for Missing-Sensor Traffic Imputation and Probabilistic Forecasting**.
 
-The model combines a causal reliability-gated road-sensor graph, graph-GRU states, missing-entry reconstruction and direct Gaussian forecasts. Unavailable sources receive zero graph weight; a fully unavailable neighborhood produces a zero message and retains the local recurrent path.
+## Installation
 
-## Install
-
-Use Python 3.11 or later and install from this directory in an activated environment:
+Requires Python `>=3.11`. Run from the repository root in an activated environment.
 
 ```bash
 python -m pip install -e .
 ```
 
-Install a compatible CUDA PyTorch build to use `--device cuda`; CPU is the default.
+Inspection environment: Python 3.13.5; numpy 2.1.3, scipy 1.15.3, torch 2.7.1+cu118, matplotlib 3.10.0, pandas 2.2.3. Checks: Python syntax, configuration parsing and CLI/source argument matching. Training and full evaluation were not run.
 
-## Prepare traffic timelines
+## Data and preprocessing
 
 Obtain the METR-LA or PEMS-BAY speed data and sensor-distance tables from the DCRNN dataset distribution. The input HDF must contain a timestamp-indexed DataFrame with one sensor per column. A distance CSV has the columns `from,to,distance`; its IDs must match the HDF column names. Unlisted edges have infinite distance. Distances use one common nonnegative unit.
 
@@ -28,57 +26,36 @@ Finite readings are available, including numerical zeros. Declare `--sentinel VA
 
 Preparation saves the normalized train/validation/test timelines, source-availability masks, distance matrix and a fixed bank of global fault masks. Each family has rates 0, 0.1, 0.3 and 0.5 and ten realizations by default. All methods consume these same files.
 
-Random masks select available entries without replacement. Blocks choose sensors, start times and durations of 6, 12 or 24 steps, truncating the final proposal to reach the target count. Persistent outages hide complete sensor timelines, so their realized rate depends on source availability. Mixed masks allocate up to a third of the target to whole sensors, a third to blocks, and the remaining count to random entries; indivisible whole-sensor leftovers enter the random allocation. No naturally absent value becomes an artificial target.
-
-## Train a universal model
+## Training and inference
 
 ```bash
 rgdgl train --data data/metr --output outputs/full --variant full --seed 13
 ```
 
-Defaults are 12 input steps, 12 forecast steps, width 64, diffusion order two, Adam learning rate 0.001 and validation patience 15. Each epoch draws one global training fault family/rate and leaves 10% of windows clean. The selected model minimizes uncalibrated validation NLL over the twelve family/nonzero-rate conditions. A single multiplicative variance scale is fitted on the same validation bank and frozen for evaluation.
+## Evaluation
 
-The candidate graph contains each sensor and its ten nearest neighbors. At recurrent step `s`, correlations and source observation fractions use only the prefix ending at `s`, capped at the input-window length. Co-observed correlations require four time/channel pairs and nonzero variance; shrinkage defaults to ten. Learned nonnegative distance and correlation coefficients define affinities. Exponentials use rowwise maximum subtraction, followed by absolute source-reliability gating. Correlation statistics are detached from gradients.
+```bash
+rgdgl evaluate --data data/metr --model outputs/full/model.pt --family random --rate 0.3 --realization 0 --output outputs/full_random03
+rgdgl plot --metrics outputs/full_random03/metrics.json outputs/nogate_random03/metrics.json --output outputs/figures
+```
 
-The Gaussian NLL supervises available future targets. The L1 imputation term supervises only artificially hidden, originally available input entries. The entropy term favors concentrated neighbor weights. `--imputation-weight` defaults to 1 and `--entropy-weight` to 0.001. Other controls include `--neighbors`, `--minimum-pairs`, `--shrinkage`, `--diffusion`, `--width`, `--epochs` and `--batch-size`.
+Keep fault family, rate and realization identical between checkpoints.
 
-## Baseline and ablation comparisons
+## Comparisons and ablations
 
 ```bash
 rgdgl train --data data/metr --output outputs/static --variant static --seed 13
 rgdgl train --data data/metr --output outputs/no_gate --variant no_gate --seed 13
 rgdgl train --data data/metr --output outputs/no_correlation --variant no_correlation --seed 13
 rgdgl train --data data/metr --output outputs/no_imputation --variant no_imputation --seed 13
-```
-
-The static-distance graph-GRU is an encoder-controlled baseline. `no_gate` removes reliability multiplication while keeping dynamic correlation, `no_correlation` removes the correlation contribution, and `no_imputation` removes reconstruction supervision. All variants retain the same feature inputs, Gaussian heads, dimensions, mask policy, optimizer and validation selection. The static control sets source reliability to one and correlation to zero; it therefore answers a different question from the dynamic graph without a reliability gate.
-
-## Evaluate frozen models
-
-```bash
-rgdgl evaluate --data data/metr --model outputs/full/model.pt --family random --rate 0.3 --realization 0 --output outputs/full_random03
 rgdgl evaluate --data data/metr --model outputs/no_gate/model.pt --family random --rate 0.3 --realization 0 --output outputs/nogate_random03
 ```
 
-Evaluate the same checkpoint over all four fault families, all rates and realization IDs. `--uncalibrated` evaluates its original variance. `--mape-threshold 5` excludes targets below an absolute speed of five from MAPE; keep this threshold and speed units fixed across comparisons.
+## Outputs
 
-`metrics.json` contains MAE/RMSE at 15, 30 and 60 minutes and over the full horizon; thresholded MAPE; hidden-entry imputation MAE; Gaussian NLL including its normalizing constant in original speed units; closed-form Gaussian CRPS; empirical coverage, coverage error and width at nominal levels 0.50–0.95. Clean-input imputation MAE is null because no artificial imputation targets exist. Parameter count and mean per-window inference time are reported separately; the latter is measured under the requested batch size and should be interpreted as throughput-derived latency.
-
-`predictions.npz` stores forecasts, variances, targets and availability at each origin. Overlapping forecast windows are retained, not treated as independent experimental runs. `model.pt` stores the selected parameters, exact training options and validation variance scale. `history.json` records actual train and development losses.
+Training writes `model.pt` and `history.json`. Evaluation writes `metrics.json` and `predictions.npz` with forecasts, variances, targets and availability.
 
 ```bash
 rgdgl plot --metrics outputs/full_random03/metrics.json outputs/nogate_random03/metrics.json --output outputs/figures
-```
-
-Supply multiple rates from one dataset, fault family and seed to draw robustness curves. `robustness_slopes.json` fits MAE against realized missingness for each variant. Keep conditions separate when making these plots; repeat training seeds and complete mask realizations before summarizing variability.
-
-## Cost and paired uncertainty analysis
-
-```bash
-rgdgl-benchmark --data data/metr --model outputs/full/model.pt --output outputs/full/cost.json --device cpu
 rgdgl-compare --first outputs/full_random03/predictions.npz --second outputs/nogate_random03/predictions.npz --output outputs/paired.json --block 288 --resamples 10000
 ```
-
-The benchmark measures batch-one inference after 200 warmup calls and 1,000 timed calls. It reports mean/p95 latency, parameter count, process RSS sampled between calls, and peak allocated CUDA memory when applicable. PyTorch's profiler reports the FLOPs of supported operators; this partial count does not include every recurrent, indexing or graph-statistics operation.
-
-For hierarchical paired bootstrap, pass multiple seed/mask runs in corresponding order to `--first` and `--second`. The command checks origin indices, targets and availability, resamples complete runs, then moving blocks of 288 forecast origins inside each selected run. It reports the first-minus-second MAE difference, a 95% interval and a centered two-sided bootstrap p-value. Negative differences favor the first model. A single pair still permits block uncertainty analysis but cannot estimate between-run variability. Use complete matching seed/mask runs for the paper's full comparison.

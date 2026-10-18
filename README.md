@@ -36,7 +36,6 @@ rgdgl train --data data/metr --output outputs/full --variant full --seed 13
 
 ```bash
 rgdgl evaluate --data data/metr --model outputs/full/model.pt --family random --rate 0.3 --realization 0 --output outputs/full_random03
-rgdgl plot --metrics outputs/full_random03/metrics.json outputs/nogate_random03/metrics.json --output outputs/figures
 ```
 
 Keep fault family, rate and realization identical between checkpoints.

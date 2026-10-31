@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 class ReliabilityGraph(nn.Module):
     def __init__(self, distance, channels=1, width=64, horizon=12, neighbors=10, graph_window=12,
-                 minimum_pairs=4, shrinkage=10, diffusion=2, variant="full"):
+                 minimum_pairs=4, shrinkage=10, diffusion=2, variant="full", dropout=0.1):
         super().__init__()
         distance = torch.as_tensor(distance, dtype=torch.float32)
         nodes = len(distance)
@@ -27,6 +27,7 @@ class ReliabilityGraph(nn.Module):
         self.identity = nn.Embedding(nodes, width)
         self.graph_maps = nn.ModuleList([nn.Linear(width, width) for _ in range(diffusion + 1)])
         self.cell = nn.GRUCell(width, width)
+        self.dropout = nn.Dropout(dropout)
         self.impute = nn.Linear(width, channels)
         self.mean = nn.Linear(width, horizon * channels)
         self.variance = nn.Linear(width, horizon * channels)
@@ -78,7 +79,7 @@ class ReliabilityGraph(nn.Module):
             for transform in self.graph_maps[1:]:
                 propagated = (adjacency[..., None] * propagated[:, self.candidate]).sum(2)
                 message = message + transform(propagated)
-            hidden = self.cell(F.relu(message).reshape(batch * nodes, self.width), hidden)
+            hidden = self.cell(self.dropout(F.relu(message)).reshape(batch * nodes, self.width), hidden)
             state = hidden.reshape(batch, nodes, self.width)
             imputation.append(self.impute(state))
             entropy.append(-(adjacency * (adjacency + 1e-6).log()).sum(-1).mean())

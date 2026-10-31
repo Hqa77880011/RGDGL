@@ -1,5 +1,4 @@
 """CPU functional checks; synthetic values do not reproduce paper results."""
-import argparse
 import sys
 
 import numpy as np
@@ -70,3 +69,22 @@ def test_metric_arithmetic():
     assert result["imputation_mae"] == 3
     assert result["mape_percent"] is None
     np.testing.assert_allclose(result["nll"], .5 * np.log(2*np.pi) + 2)
+
+
+def test_nonempty_training_faults_and_dropout():
+    from rgdgl.data import fault_mask, TrafficWindows
+    for family in ("random", "block", "persistent", "mixed"):
+        available=np.zeros((2,3,1),dtype=bool);available[0,1,0]=True
+        hidden=fault_mask(available,family,.1,13,nonempty=True)
+        assert (hidden & available).sum()==1 and not (hidden & ~available).any()
+    model=ReliabilityGraph(np.zeros((3,3)),width=4,horizon=1)
+    assert model.dropout.p==.1
+    x=torch.randn(2,3,3,1);m=torch.ones_like(x);clock=torch.randn(2,3,2)
+    model.train();torch.manual_seed(1);a=model(x,m,clock)[1]
+    torch.manual_seed(2);b=model(x,m,clock)[1]
+    assert not torch.equal(a,b)
+    model.eval();torch.testing.assert_close(model(x,m,clock)[1],model(x,m,clock)[1],atol=0,rtol=0)
+    data=dict(x=np.zeros((10,3,1)),available=np.zeros((10,3,1),bool),clock=np.zeros(10))
+    data["available"][7:]=True
+    dataset=TrafficWindows(data,np.zeros_like(data["available"]),window=2,horizon=1,require_input=True)
+    assert dataset.origins==[8,9]

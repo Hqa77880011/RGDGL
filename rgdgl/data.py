@@ -4,12 +4,18 @@ import numpy as np
 import pandas as pd
 
 
-def fault_mask(available, family, rate, seed):
+def fault_mask(available, family, rate, seed, nonempty=False):
     rng = np.random.default_rng(seed)
     hidden = np.zeros_like(available, dtype=bool)
     target = round(rate * int(available.sum()))
+    if nonempty and rate > 0 and available.any():
+        target = max(1, target)
     if family == "persistent":
-        nodes = rng.choice(available.shape[1], round(rate * available.shape[1]), replace=False)
+        eligible = np.flatnonzero(available.any(axis=(0, 2))) if nonempty else np.arange(available.shape[1])
+        count = round(rate * available.shape[1])
+        if nonempty and rate > 0 and len(eligible):
+            count = max(1, count)
+        nodes = rng.choice(eligible, min(count, len(eligible)), replace=False)
         hidden[:, nodes] = available[:, nodes]
         return hidden
     if family == "mixed":
@@ -92,9 +98,10 @@ def prepare(args):
 
 
 class TrafficWindows:
-    def __init__(self, data, hidden, window=12, horizon=12):
+    def __init__(self, data, hidden, window=12, horizon=12, require_input=False):
         self.data, self.hidden, self.window, self.horizon = data, hidden, window, horizon
-        self.origins = [i for i in range(window, len(data["x"]) - horizon + 1) if data["available"][i:i + horizon].any()]
+        self.origins = [i for i in range(window, len(data["x"]) - horizon + 1) if data["available"][i:i + horizon].any()
+                        and (not require_input or data["available"][i-window:i].any())]
 
     def __len__(self):
         return len(self.origins)

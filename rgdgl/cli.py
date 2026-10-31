@@ -20,7 +20,7 @@ def read(path):
 def construct(args, metadata):
     return ReliabilityGraph(metadata["distance"], metadata["mean"].size, args.width, args.horizon,
                             args.neighbors, args.window, args.minimum_pairs, args.shrinkage,
-                            args.diffusion, args.variant).to(args.device)
+                            args.diffusion, args.variant, getattr(args, "dropout", 0.1)).to(args.device)
 
 
 @torch.no_grad()
@@ -54,7 +54,7 @@ def train(args):
     training, validation = read(root / "train.npz"), read(root / "val.npz")
     model = construct(args, metadata)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    history, best, waiting = [], np.inf, 0
+    history, best, waiting = [], (np.inf, np.inf), 0
     validation_bank = []
     for family in ("random", "block", "persistent", "mixed"):
         for rate in (0.1, 0.3, 0.5):
@@ -64,7 +64,9 @@ def train(args):
         family = rng.choice(["random", "block", "persistent", "mixed"])
         rate = float(rng.choice([0.1, 0.3, 0.5]))
         hidden = fault_mask(training["available"], family, rate, args.seed + epoch)
-        dataset = TrafficWindows(training, hidden, args.window, args.horizon)
+        dataset = TrafficWindows(training, hidden, args.window, args.horizon, require_input=True)
+        if not len(dataset):
+            raise ValueError("Training needs windows with observed inputs and available forecast targets")
         loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                             generator=torch.Generator().manual_seed(args.seed + epoch))
         model.train()
@@ -73,7 +75,16 @@ def train(args):
             values = [item.to(args.device) for item in batch]
             clean = torch.tensor(rng.random(len(values[0])) < 0.1, device=args.device)
             values[2][clean] = 0
+            # Preserve intentional clean windows. Other empty masks are resampled
+            # conditionally on at least one eligible reconstruction target.
+            for index in (~clean).nonzero().flatten().tolist():
+                available = values[1][index].cpu().numpy().astype(bool)
+                if not (values[1][index] * values[2][index]).any():
+                    sampled = fault_mask(available, family, rate, int(rng.integers(2**31)), nonempty=True)
+                    values[2][index] = torch.as_tensor(sampled, device=args.device)
             objective = loss(model, *values, args.imputation_weight, args.entropy_weight)
+            if not torch.isfinite(objective):
+                raise FloatingPointError("Nonfinite training objective")
             optimizer.zero_grad()
             objective.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
@@ -90,8 +101,8 @@ def train(args):
         nll = float(np.mean(0.5 * (np.log(2 * np.pi * variance) + squared / variance)))
         mae = float(np.concatenate(errors).mean())
         history.append(dict(epoch=epoch + 1, train_loss=float(np.mean(losses)), validation_nll=nll, validation_mae=mae))
-        if nll < best:
-            best, waiting = nll, 0
+        if (nll, mae) < best:
+            best, waiting = (nll, mae), 0
             calibration = max(float(np.mean(squared / variance)), 1e-6)
             torch.save(dict(state=model.state_dict(), config=vars(args), variance_scale=calibration), output / "model.pt")
         else:
@@ -174,7 +185,7 @@ def main():
     for name, default in (("window", 12), ("horizon", 12), ("width", 64), ("neighbors", 10), ("minimum-pairs", 4),
                           ("diffusion", 2), ("epochs", 100), ("patience", 15), ("batch-size", 64), ("seed", 13)):
         training.add_argument(f"--{name}", type=int, default=default)
-    for name, default in (("lr", 0.001), ("imputation-weight", 1.0), ("entropy-weight", 0.001), ("shrinkage", 10.0)):
+    for name, default in (("lr", 0.001), ("dropout", 0.1), ("imputation-weight", 1.0), ("entropy-weight", 0.001), ("shrinkage", 10.0)):
         training.add_argument(f"--{name}", type=float, default=default)
     training.add_argument("--device", default="cpu")
     evaluation = sub.add_parser("evaluate")

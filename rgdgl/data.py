@@ -87,7 +87,7 @@ def prepare(args):
     for part, left, right in zip(("train", "val", "test"), boundaries[:-1], boundaries[1:]):
         b = available[left:right]
         x = np.where(b, (values[left:right] - mean) / scale, 0).astype(np.float32)
-        np.savez_compressed(output / f"{part}.npz", x=x, available=b, clock=clock[left:right])
+        np.savez_compressed(output / f"{part}.npz", x=x, available=b, clock=clock[left:right],offset=left)
         for family_number, family in enumerate(("random", "block", "persistent", "mixed")):
             for rate_number, rate in enumerate((0.0, 0.1, 0.3, 0.5)):
                 for realization in range(args.realizations):
@@ -98,8 +98,9 @@ def prepare(args):
 
 
 class TrafficWindows:
-    def __init__(self, data, hidden, window=12, horizon=12, require_input=False):
+    def __init__(self, data, hidden, window=12, horizon=12, require_input=False,context=False):
         self.data, self.hidden, self.window, self.horizon = data, hidden, window, horizon
+        self.context=context
         self.origins = [i for i in range(window, len(data["x"]) - horizon + 1) if data["available"][i:i + horizon].any()
                         and (not require_input or data["available"][i-window:i].any())]
 
@@ -111,6 +112,7 @@ class TrafficWindows:
         start = end - self.window
         clock = self.data["clock"][start:end]
         time = np.stack([np.sin(2 * np.pi * clock), np.cos(2 * np.pi * clock)], 1).astype(np.float32)
+        if self.context:time=dict(time=time,origin=int(self.data.get("offset",0))+end)
         return (self.data["x"][start:end], self.data["available"][start:end].astype(np.float32),
                 self.hidden[start:end].astype(np.float32), time, self.data["x"][end:end + self.horizon],
                 self.data["available"][end:end + self.horizon].astype(np.float32))

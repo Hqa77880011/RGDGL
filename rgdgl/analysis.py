@@ -7,8 +7,7 @@ import numpy as np
 import psutil
 import torch
 
-from .cli import construct, read
-from .data import TrafficWindows
+from .cli import construct, read,windows
 
 
 def benchmark():
@@ -25,16 +24,18 @@ def benchmark():
     root = Path(args.data)
     checkpoint = torch.load(args.model, map_location=args.device, weights_only=True)
     options = argparse.Namespace(**checkpoint["config"])
-    options.device = args.device
+    options.device,options.data = args.device,args.data
     model = construct(options, read(root / "metadata.npz"))
     model.load_state_dict(checkpoint["state"])
     model.eval()
     data = read(root / "test.npz")
     hidden = read(root / "test_random_0.3_0.npz")["hidden"]
-    dataset = TrafficWindows(data, hidden, options.window, options.horizon)
+    dataset = windows(data, hidden, options)
     if not len(dataset):
         raise ValueError("Benchmark requires one available forecast window")
-    x, available, q, clock, _, _ = [torch.as_tensor(value, device=args.device)[None] for value in dataset[0]]
+    def tensor(value):
+        return {key:torch.as_tensor(item,device=args.device)[None] for key,item in value.items()} if isinstance(value,dict) else torch.as_tensor(value,device=args.device)[None]
+    x, available, q, clock, _, _ = [tensor(value) for value in dataset[0]]
     inputs = x, available * (1 - q), clock
     process = psutil.Process()
     if args.device.startswith("cuda"):

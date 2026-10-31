@@ -1,0 +1,65 @@
+{
+  "AGCRN": {
+    "url": "https://github.com/LeiBAI/AGCRN.git",
+    "commit": "7fbbf2aeb099242098a3cf482b55cd45d7295c28",
+    "directories": [
+      "model"
+    ],
+    "license": "MIT"
+  },
+  "Graph-WaveNet": {
+    "url": "https://github.com/nnzhan/Graph-WaveNet.git",
+    "commit": "6b162e80c59a1d494809252eca055cff93dc66b1",
+    "directories": [],
+    "license": "MIT"
+  },
+  "DCRNN-source": {
+    "url": "https://github.com/chnsh/DCRNN_PyTorch.git",
+    "commit": "d92490b808ba5c5be2f23d427d96e9a56b066d7f",
+    "directories": [
+      "model",
+      "lib"
+    ],
+    "license": "MIT; PyTorch port of DCRNN"
+  },
+  "GCN-M": {
+    "url": "https://github.com/JingweiZuo/GCN-M.git",
+    "commit": "2f0d67d11b8a1866d1765fe2233f337fef8c0e34",
+    "directories": [
+      "models",
+      "configs"
+    ],
+    "license": "Apache-2.0"
+  },
+  "UIGNN": {
+    "url": "https://github.com/lijunxian111/UIGNN.git",
+    "commit": "56485b647886f4fd12ccc4fce5d66f5e49f526ea",
+    "directories": [],
+    "license": "No top-level license; runtime source only, not redistributed"
+  },
+  "SAITS": {
+    "url": "https://github.com/WenjieDu/SAITS.git",
+    "commit": "660b87f19c1277065f314f24134f646229e89ca9",
+    "directories": [
+      "modeling"
+    ],
+    "license": "MIT"
+  },
+  "MagiNet": {
+    "url": "https://github.com/JeremyChou28/MagiNet.git",
+    "commit": "edd399dbd287408a4652653ad3fd26c26a9c3081",
+    "directories": [
+      "models",
+      "configs"
+    ],
+    "license": "MIT"
+  },
+  "GRIN": {
+    "url": "https://github.com/Graph-Machine-Learning-Group/grin.git",
+    "commit": "4a28afbb092600b6e6abeeabaaf67e87dbd1ed6e",
+    "directories": [
+      "lib"
+    ],
+    "license": "No top-level license; runtime source only, not redistributed"
+  }
+}

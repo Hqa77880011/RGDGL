@@ -28,7 +28,6 @@ def test_cpu_pipeline(tmp_path, monkeypatch):
     command("evaluate", "--data", data, "--model", run / "model.pt", "--output", evaluation)
     assert (evaluation / "predictions.npz").is_file()
     command("plot", "--metrics", evaluation / "metrics.json", "--output", tmp_path / "figures")
-    state = torch.load(run / "model.pt", weights_only=True)
     for variant in ("full", "no_gate", "no_correlation", "static", "no_imputation"):
         model = ReliabilityGraph(distance, width=4, horizon=2, neighbors=2, minimum_pairs=2, variant=variant)
         x = torch.randn(2, 4, 3, 1)

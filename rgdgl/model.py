@@ -89,6 +89,8 @@ class ReliabilityGraph(nn.Module):
 
 
 def loss(model, x, available, hidden, clock, y, target_available, imputation_weight=1, entropy_weight=0.001):
+    if hasattr(model,"objective"):
+        return model.objective(x,available,hidden,clock,y,target_available,imputation_weight,entropy_weight)
     reconstruction, mean, variance, entropy = model(x, available * (1 - hidden), clock)
     reconstruction_mask = available * hidden
     reconstruction_loss = ((reconstruction - x).abs() * reconstruction_mask).sum() / reconstruction_mask.sum().clamp_min(1)

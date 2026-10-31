@@ -10,7 +10,7 @@ Requires Python `>=3.11`. Run from the repository root in an activated environme
 python -m pip install -e .
 ```
 
-Inspection environment: Python 3.13.5; numpy 2.1.3, scipy 1.15.3, torch 2.7.1+cu118, matplotlib 3.10.0, pandas 2.2.3. Checks: Python syntax, configuration parsing and CLI/source argument matching. Training and full evaluation were not run.
+Inspection environment: Python 3.13.5; numpy 2.1.3, scipy 1.15.3, torch 2.7.1+cu118, matplotlib 3.10.0, pandas 2.2.3. CPU functional verification: `python -m pytest -q tests/test_functional.py` passed 2 checks on 2026-11-01. A synthetic 160-step, 3-sensor timeline exercised preparation, one training epoch, validation-only variance fitting, checkpoint reload, forecast metrics and plots. All five variants passed finite loss/backward/parameter-update and exact eval round-trip checks; learned graph scalars received gradients in the full model. These checks are not paper performance results. Full METR-LA/PEMS-BAY experiments were not run.
 
 ## Data and preprocessing
 
@@ -58,3 +58,15 @@ Training writes `model.pt` and `history.json`. Evaluation writes `metrics.json` 
 rgdgl plot --metrics outputs/full_random03/metrics.json outputs/nogate_random03/metrics.json --output outputs/figures
 rgdgl-compare --first outputs/full_random03/predictions.npz --second outputs/nogate_random03/predictions.npz --output outputs/paired.json --block 288 --resamples 10000
 ```
+
+## Method and metric entry points
+
+| Paper component | Entry point | Command/configuration |
+| --- | --- | --- |
+| Causal correlation, reliability gate, graph GRU, dual heads | `rgdgl/model.py:ReliabilityGraph` | `rgdgl train --variant full` |
+| Masked reconstruction + Gaussian NLL + entropy | `rgdgl/model.py:loss` | `--imputation-weight 1 --entropy-weight .001` |
+| Chronological train-only scaling and global fault bank | `rgdgl/data.py:prepare` | `rgdgl prepare` |
+| MAE/RMSE/MAPE, reconstruction MAE, NLL/CRPS and coverage/width | `rgdgl/cli.py:metrics` | `rgdgl evaluate` |
+| Robustness slopes, paired block bootstrap, batch-one costs | `rgdgl/cli.py:main`, `rgdgl/analysis.py` | `rgdgl plot`, `rgdgl-compare`, `rgdgl-benchmark` |
+
+This repository provides the graph method and its five listed controls. The paper's external DCRNN/Graph WaveNet/AGCRN, BRITS/SAITS/GRIN/MagiNet and GCN-M/UIGNN systems are not implemented here. The current backbone uses a ReLU graph message without the paper's stated 0.1 dropout; model selection uses validation NLL without its secondary MAE tie-break. Empty sampled reconstruction masks contribute zero rather than resampling. These implementation differences must be resolved before claiming a complete reproduction of every comparison. No private traffic data, weights or paper result arrays are included.

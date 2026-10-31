@@ -12,3 +12,5 @@ jobs:
       - run: pip install .
       - run: python -m compileall -q rgdgl
       - run: python -c "import rgdgl; import rgdgl.cli"
+      - run: pip install pytest
+      - run: OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python -m pytest -q tests/test_functional.py

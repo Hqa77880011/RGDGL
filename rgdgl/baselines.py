@@ -109,6 +109,12 @@ class NativeForecast(nn.Module):
                 namespace=dict(torch=torch,nn=nn,F=F,np=np,math=__import__('math'),make_model=module.make_model)
                 cls=definitions(Path('.external/MagiNet/main.py'),names,namespace)['MagiNet']
                 self.imputation_model=cls(args.device,self.nodes,args.window,1,args.width,1,2,1,args.width,graph)
+                # Upstream Chebyshev tensors are plain attributes computed by
+                # ARPACK. Preserve the actual fitted basis in the checkpoint.
+                for part in self.imputation_model.modules():
+                    if hasattr(part,'cheb_polynomials'):
+                        for index,basis in enumerate(part.cheb_polynomials):part.register_buffer(f'graph_basis_{index}',basis.clone())
+                        part.cheb_polynomials=[getattr(part,f'graph_basis_{index}') for index in range(len(part.cheb_polynomials))]
         if self.imputer in {'brits','grin','saits','maginet'} and self.forecaster!='agcrn':
             raise ValueError('Dedicated imputers must use the common AGCRN forecaster')
         if self.forecaster in {'agcrn','agcrn_mask'}:

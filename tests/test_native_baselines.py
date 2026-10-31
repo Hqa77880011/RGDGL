@@ -53,7 +53,12 @@ def test_original_baseline_update_reload(forecaster,imputer,objective,tmp_path,p
     assert any(not torch.equal(value,before[key]) for key,value in model.named_parameters())
     model.eval();expected=model(x,available*(1-hidden),clock)[1]
     checkpoint=tmp_path/'baseline.pt';torch.save(model.state_dict(),checkpoint)
-    restored=NativeForecast(args,metadata,dict(training,x=training["x"]+99) if imputer=="knn" else training);restored.load_state_dict(torch.load(checkpoint,weights_only=True));restored.eval()
+    restored=NativeForecast(args,metadata,dict(training,x=training["x"]+99) if imputer=="knn" else training)
+    if imputer=='maginet':
+        with torch.no_grad():
+            for name,basis in restored.named_buffers():
+                if 'graph_basis_' in name:basis.mul_(1.1)
+    restored.load_state_dict(torch.load(checkpoint,weights_only=True));restored.eval()
     torch.testing.assert_close(restored(x,available*(1-hidden),clock)[1],expected,rtol=0,atol=0)
     changed=x.clone();changed[hidden.bool()]+=1000
     torch.testing.assert_close(restored(changed,available*(1-hidden),clock)[1],expected,rtol=0,atol=0)

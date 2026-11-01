@@ -1,4 +1,4 @@
-"""CPU functional checks; synthetic values do not reproduce paper results."""
+"""CPU functional checks with synthetic traffic timelines."""
 import sys
 
 import numpy as np
